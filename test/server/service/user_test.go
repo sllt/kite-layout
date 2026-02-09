@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	v1 "github.com/sllt/kite-layout/api/v1"
 	"github.com/sllt/kite-layout/pkg/jwt"
 	"github.com/sllt/kite-layout/test/mocks/repository"
 	"os"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/sllt/kite-layout/internal/model"
 	"github.com/sllt/kite-layout/internal/service"
+	"github.com/sllt/kite-layout/internal/types"
 	"github.com/sllt/kite-layout/pkg/log"
 	"github.com/sllt/kite-layout/pkg/sid"
 	"github.com/golang/mock/gomock"
@@ -53,7 +53,7 @@ func TestUserService_Register(t *testing.T) {
 	userService := service.NewUserService(srv, mockUserRepo)
 
 	ctx := context.Background()
-	req := &v1.RegisterRequest{
+	req := &types.RegisterInput{
 		Password: "password",
 		Email:    "test@example.com",
 	}
@@ -76,7 +76,7 @@ func TestUserService_Register_UsernameExists(t *testing.T) {
 	userService := service.NewUserService(srv, mockUserRepo)
 
 	ctx := context.Background()
-	req := &v1.RegisterRequest{
+	req := &types.RegisterInput{
 		Password: "password",
 		Email:    "test@example.com",
 	}
@@ -98,7 +98,7 @@ func TestUserService_Login(t *testing.T) {
 	userService := service.NewUserService(srv, mockUserRepo)
 
 	ctx := context.Background()
-	req := &v1.LoginRequest{
+	req := &types.LoginInput{
 		Email:    "xxx@gmail.com",
 		Password: "password",
 	}
@@ -127,7 +127,7 @@ func TestUserService_Login_UserNotFound(t *testing.T) {
 	userService := service.NewUserService(srv, mockUserRepo)
 
 	ctx := context.Background()
-	req := &v1.LoginRequest{
+	req := &types.LoginInput{
 		Email:    "xxx@gmail.com",
 		Password: "password",
 	}
@@ -173,7 +173,7 @@ func TestUserService_UpdateProfile(t *testing.T) {
 
 	ctx := context.Background()
 	userId := "123"
-	req := &v1.UpdateProfileRequest{
+	req := &types.UpdateProfileInput{
 		Nickname: "testuser",
 		Email:    "test@example.com",
 	}
@@ -200,7 +200,7 @@ func TestUserService_UpdateProfile_UserNotFound(t *testing.T) {
 
 	ctx := context.Background()
 	userId := "123"
-	req := &v1.UpdateProfileRequest{
+	req := &types.UpdateProfileInput{
 		Nickname: "testuser",
 		Email:    "test@example.com",
 	}

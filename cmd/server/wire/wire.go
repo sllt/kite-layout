@@ -52,16 +52,17 @@ func NewDB(app *kite.App) infra.DB {
 	return app.Container().SQL
 }
 
-// newApp ensures routes are registered (via HTTPServerReady dependency)
-// then returns the kite app for lifecycle management.
-func newApp(
-	app *kite.App,
-	_ *server.HTTPServerReady,
-) *kite.App {
-	return app
+// App wraps kite.App, embedding it so callers can use it transparently.
+// This wrapper exists because wire requires distinct types for providers.
+type App struct {
+	*kite.App
 }
 
-func NewWire() (*kite.App, func(), error) {
+func newApp(app *kite.App, _ *server.HTTPServerReady) *App {
+	return &App{App: app}
+}
+
+func NewWire() (*App, func(), error) {
 	panic(wire.Build(
 		repositorySet,
 		serviceSet,

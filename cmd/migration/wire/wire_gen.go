@@ -7,21 +7,19 @@
 package wire
 
 import (
+	"github.com/google/wire"
 	"github.com/sllt/kite-layout/internal/server"
 	"github.com/sllt/kite-layout/pkg/app"
 	"github.com/sllt/kite-layout/pkg/log"
-	"github.com/google/wire"
 	"github.com/sllt/kite/pkg/kite"
-	"github.com/sllt/kite/pkg/kite/infra"
 )
 
 // Injectors from wire.go:
 
 func NewWire() (*app.App, func(), error) {
 	kiteApp := NewKiteApp()
-	db := NewDB(kiteApp)
 	logger := NewLogger(kiteApp)
-	migrateServer := server.NewMigrateServer(db, logger)
+	migrateServer := server.NewMigrateServer(kiteApp, logger)
 	appApp := newApp(migrateServer)
 	return appApp, func() {
 	}, nil
@@ -39,11 +37,6 @@ func NewKiteApp() *kite.App {
 // NewLogger extracts kite's logger from the container and wraps it.
 func NewLogger(app2 *kite.App) *log.Logger {
 	return log.NewLogger(app2.Container().Logger)
-}
-
-// NewDB extracts infra.DB from the kite app's container
-func NewDB(app2 *kite.App) infra.DB {
-	return app2.Container().SQL
 }
 
 // build App

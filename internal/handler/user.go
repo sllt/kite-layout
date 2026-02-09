@@ -1,8 +1,9 @@
 package handler
 
 import (
-	"github.com/sllt/kite-layout/api/v1"
+	v1 "github.com/sllt/kite-layout/api/v1"
 	"github.com/sllt/kite-layout/internal/service"
+	"github.com/sllt/kite-layout/internal/types"
 	"github.com/sllt/kite/pkg/kite"
 )
 
@@ -26,7 +27,7 @@ func NewUserHandler(handler *Handler, userService service.UserService) *UserHand
 // @Accept json
 // @Produce json
 // @Param request body v1.RegisterRequest true "params"
-// @Success 200 {object} v1.Response
+// @Success 200 {object} errcode.Response
 // @Router /register [post]
 func (h *UserHandler) Register(ctx *kite.Context) (any, error) {
 	req := new(v1.RegisterRequest)
@@ -34,7 +35,12 @@ func (h *UserHandler) Register(ctx *kite.Context) (any, error) {
 		return nil, err
 	}
 
-	if err := h.userService.Register(ctx, req); err != nil {
+	input := &types.RegisterInput{
+		Email:    req.Email,
+		Password: req.Password,
+	}
+
+	if err := h.userService.Register(ctx, input); err != nil {
 		h.logger.Errorf("userService.Register error: %v", err)
 		return nil, err
 	}
@@ -50,7 +56,7 @@ func (h *UserHandler) Register(ctx *kite.Context) (any, error) {
 // @Accept json
 // @Produce json
 // @Param request body v1.LoginRequest true "params"
-// @Success 200 {object} v1.LoginResponse
+// @Success 200 {object} errcode.Response{data=v1.LoginResponseData}
 // @Router /login [post]
 func (h *UserHandler) Login(ctx *kite.Context) (any, error) {
 	var req v1.LoginRequest
@@ -58,13 +64,18 @@ func (h *UserHandler) Login(ctx *kite.Context) (any, error) {
 		return nil, err
 	}
 
-	token, err := h.userService.Login(ctx, &req)
+	input := &types.LoginInput{
+		Email:    req.Email,
+		Password: req.Password,
+	}
+
+	output, err := h.userService.Login(ctx, input)
 	if err != nil {
-		return nil, v1.ErrUnauthorized
+		return nil, err
 	}
 
 	return v1.LoginResponseData{
-		AccessToken: token,
+		AccessToken: output.AccessToken,
 	}, nil
 }
 
@@ -76,20 +87,20 @@ func (h *UserHandler) Login(ctx *kite.Context) (any, error) {
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Success 200 {object} v1.GetProfileResponse
+// @Success 200 {object} errcode.Response{data=v1.GetProfileResponseData}
 // @Router /user [get]
 func (h *UserHandler) GetProfile(ctx *kite.Context) (any, error) {
 	userId := GetUserIdFromCtx(ctx)
-	if userId == "" {
-		return nil, v1.ErrUnauthorized
-	}
 
-	user, err := h.userService.GetProfile(ctx, userId)
+	output, err := h.userService.GetProfile(ctx, userId)
 	if err != nil {
-		return nil, v1.ErrBadRequest
+		return nil, err
 	}
 
-	return user, nil
+	return v1.GetProfileResponseData{
+		UserId:   output.UserId,
+		Nickname: output.Nickname,
+	}, nil
 }
 
 // UpdateProfile godoc
@@ -101,21 +112,23 @@ func (h *UserHandler) GetProfile(ctx *kite.Context) (any, error) {
 // @Produce json
 // @Security Bearer
 // @Param request body v1.UpdateProfileRequest true "params"
-// @Success 200 {object} v1.Response
+// @Success 200 {object} errcode.Response
 // @Router /user [put]
 func (h *UserHandler) UpdateProfile(ctx *kite.Context) (any, error) {
 	userId := GetUserIdFromCtx(ctx)
-	if userId == "" {
-		return nil, v1.ErrUnauthorized
-	}
 
 	var req v1.UpdateProfileRequest
 	if err := ctx.Bind(&req); err != nil {
 		return nil, err
 	}
 
-	if err := h.userService.UpdateProfile(ctx, userId, &req); err != nil {
-		return nil, v1.ErrInternalServerError
+	input := &types.UpdateProfileInput{
+		Nickname: req.Nickname,
+		Email:    req.Email,
+	}
+
+	if err := h.userService.UpdateProfile(ctx, userId, input); err != nil {
+		return nil, err
 	}
 
 	return nil, nil

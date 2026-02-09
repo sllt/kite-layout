@@ -2,21 +2,15 @@ package repository
 
 import (
 	"context"
-	"database/sql"
+	"errors"
 
 	"github.com/sllt/kite-layout/pkg/log"
-	"github.com/sllt/kite/pkg/kite/infra"
 	kiteSQL "github.com/sllt/kite/pkg/kite/datasource/sql"
+	"github.com/sllt/kite/pkg/kite/infra"
 )
 
-const ctxTxKey = "TxKey"
-
-// Querier is a common interface satisfied by both infra.DB and kiteSQL.Tx
-type Querier interface {
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
+// txKey is a typed context key to avoid collisions with other packages.
+type txKey struct{}
 
 type Repository struct {
 	db     infra.DB
@@ -39,25 +33,41 @@ func NewTransaction(r *Repository) Transaction {
 }
 
 // GetQuerier returns the transaction from context if available, otherwise the DB.
-func (r *Repository) GetQuerier(ctx context.Context) Querier {
-	v := ctx.Value(ctxTxKey)
-	if v != nil {
-		if tx, ok := v.(*kiteSQL.Tx); ok {
-			return tx
-		}
+func (r *Repository) GetQuerier(ctx context.Context) kiteSQL.Executor {
+	if tx, ok := ctx.Value(txKey{}).(*kiteSQL.Tx); ok {
+		return tx
 	}
 	return r.db
 }
 
-func (r *Repository) Transaction(ctx context.Context, fn func(ctx context.Context) error) error {
+// Transaction executes fn within a database transaction.
+// If ctx already carries a transaction, fn runs in that existing transaction (no nesting).
+func (r *Repository) Transaction(ctx context.Context, fn func(ctx context.Context) error) (err error) {
+	// Reuse existing transaction — avoids partial-commit on nested calls.
+	if _, ok := ctx.Value(txKey{}).(*kiteSQL.Tx); ok {
+		return fn(ctx)
+	}
+
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
 
-	txCtx := context.WithValue(ctx, ctxTxKey, tx)
+	txCtx := context.WithValue(ctx, txKey{}, tx)
+
+	defer func() {
+		if p := recover(); p != nil {
+			if rbErr := tx.Rollback(); rbErr != nil && r.logger != nil {
+				r.logger.Errorf("rollback after panic failed: %v", rbErr)
+			}
+			panic(p) // re-panic to preserve stack trace
+		}
+	}()
+
 	if err := fn(txCtx); err != nil {
-		_ = tx.Rollback()
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return errors.Join(err, rbErr)
+		}
 		return err
 	}
 

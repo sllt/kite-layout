@@ -2,7 +2,6 @@ package task
 
 import (
 	"github.com/sllt/kite-layout/internal/repository"
-	"github.com/sllt/kite-layout/pkg/jwt"
 	"github.com/sllt/kite-layout/pkg/log"
 	"github.com/sllt/kite-layout/pkg/sid"
 )
@@ -10,7 +9,6 @@ import (
 type Task struct {
 	logger *log.Logger
 	sid    *sid.Sid
-	jwt    *jwt.JWT
 	tm     repository.Transaction
 }
 

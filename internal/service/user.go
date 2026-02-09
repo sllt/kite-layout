@@ -2,18 +2,19 @@ package service
 
 import (
 	"context"
-	v1 "github.com/sllt/kite-layout/api/v1"
 	"github.com/sllt/kite-layout/internal/model"
 	"github.com/sllt/kite-layout/internal/repository"
+	"github.com/sllt/kite-layout/internal/types"
+	"github.com/sllt/kite-layout/pkg/errcode"
 	"golang.org/x/crypto/bcrypt"
 	"time"
 )
 
 type UserService interface {
-	Register(ctx context.Context, req *v1.RegisterRequest) error
-	Login(ctx context.Context, req *v1.LoginRequest) (string, error)
-	GetProfile(ctx context.Context, userId string) (*v1.GetProfileResponseData, error)
-	UpdateProfile(ctx context.Context, userId string, req *v1.UpdateProfileRequest) error
+	Register(ctx context.Context, input *types.RegisterInput) error
+	Login(ctx context.Context, input *types.LoginInput) (*types.LoginOutput, error)
+	GetProfile(ctx context.Context, userId string) (*types.UserOutput, error)
+	UpdateProfile(ctx context.Context, userId string, input *types.UpdateProfileInput) error
 }
 
 func NewUserService(
@@ -31,17 +32,17 @@ type userService struct {
 	*Service
 }
 
-func (s *userService) Register(ctx context.Context, req *v1.RegisterRequest) error {
+func (s *userService) Register(ctx context.Context, input *types.RegisterInput) error {
 	// check username
-	user, err := s.userRepo.GetByEmail(ctx, req.Email)
+	user, err := s.userRepo.GetByEmail(ctx, input.Email)
 	if err != nil {
-		return v1.ErrInternalServerError
+		return errcode.ErrInternalServerError
 	}
 	if err == nil && user != nil {
-		return v1.ErrEmailAlreadyUse
+		return errcode.ErrEmailAlreadyUse
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
@@ -52,7 +53,7 @@ func (s *userService) Register(ctx context.Context, req *v1.RegisterRequest) err
 	}
 	user = &model.User{
 		UserId:   userId,
-		Email:    req.Email,
+		Email:    input.Email,
 		Password: string(hashedPassword),
 	}
 	// Transaction demo
@@ -67,44 +68,44 @@ func (s *userService) Register(ctx context.Context, req *v1.RegisterRequest) err
 	return err
 }
 
-func (s *userService) Login(ctx context.Context, req *v1.LoginRequest) (string, error) {
-	user, err := s.userRepo.GetByEmail(ctx, req.Email)
+func (s *userService) Login(ctx context.Context, input *types.LoginInput) (*types.LoginOutput, error) {
+	user, err := s.userRepo.GetByEmail(ctx, input.Email)
 	if err != nil || user == nil {
-		return "", v1.ErrUnauthorized
+		return nil, errcode.ErrUnauthorized
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password))
 	if err != nil {
-		return "", err
+		return nil, errcode.ErrUnauthorized
 	}
 	token, err := s.jwt.GenToken(user.UserId, time.Now().Add(time.Hour*24*90))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return token, nil
+	return &types.LoginOutput{AccessToken: token}, nil
 }
 
-func (s *userService) GetProfile(ctx context.Context, userId string) (*v1.GetProfileResponseData, error) {
+func (s *userService) GetProfile(ctx context.Context, userId string) (*types.UserOutput, error) {
 	user, err := s.userRepo.GetByID(ctx, userId)
 	if err != nil {
 		return nil, err
 	}
 
-	return &v1.GetProfileResponseData{
+	return &types.UserOutput{
 		UserId:   user.UserId,
 		Nickname: user.Nickname,
 	}, nil
 }
 
-func (s *userService) UpdateProfile(ctx context.Context, userId string, req *v1.UpdateProfileRequest) error {
+func (s *userService) UpdateProfile(ctx context.Context, userId string, input *types.UpdateProfileInput) error {
 	user, err := s.userRepo.GetByID(ctx, userId)
 	if err != nil {
 		return err
 	}
 
-	user.Email = req.Email
-	user.Nickname = req.Nickname
+	user.Email = input.Email
+	user.Nickname = input.Nickname
 
 	if err = s.userRepo.Update(ctx, user); err != nil {
 		return err

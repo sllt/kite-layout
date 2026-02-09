@@ -6,9 +6,11 @@ import (
 	"errors"
 	"time"
 
-	v1 "github.com/sllt/kite-layout/api/v1"
 	"github.com/sllt/kite-layout/internal/model"
+	"github.com/sllt/kite-layout/pkg/errcode"
 )
+
+var errNilUser = errors.New("user is nil")
 
 type UserRepository interface {
 	Create(ctx context.Context, user *model.User) error
@@ -30,6 +32,10 @@ type userRepository struct {
 }
 
 func (r *userRepository) Create(ctx context.Context, user *model.User) error {
+	if user == nil {
+		return errNilUser
+	}
+
 	now := time.Now()
 	user.CreatedAt = now
 	user.UpdatedAt = now
@@ -52,6 +58,10 @@ func (r *userRepository) Create(ctx context.Context, user *model.User) error {
 }
 
 func (r *userRepository) Update(ctx context.Context, user *model.User) error {
+	if user == nil {
+		return errNilUser
+	}
+
 	user.UpdatedAt = time.Now()
 
 	q := r.GetQuerier(ctx)
@@ -63,33 +73,23 @@ func (r *userRepository) Update(ctx context.Context, user *model.User) error {
 }
 
 func (r *userRepository) GetByID(ctx context.Context, userId string) (*model.User, error) {
-	q := r.GetQuerier(ctx)
-	var user model.User
-	err := q.QueryRowContext(ctx,
-		"SELECT id, user_id, nickname, password, email, created_at, updated_at FROM users WHERE user_id = ?",
-		userId,
-	).Scan(&user.Id, &user.UserId, &user.Nickname, &user.Password, &user.Email, &user.CreatedAt, &user.UpdatedAt)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, v1.ErrNotFound
-		}
-		return nil, err
-	}
-	return &user, nil
+	return r.queryOne(ctx, "SELECT * FROM users WHERE user_id = ?", userId, errcode.ErrNotFound)
 }
 
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+	return r.queryOne(ctx, "SELECT * FROM users WHERE email = ?", email, nil)
+}
+
+func (r *userRepository) queryOne(ctx context.Context, query string, arg any, notFoundErr error) (*model.User, error) {
 	q := r.GetQuerier(ctx)
 	var user model.User
-	err := q.QueryRowContext(ctx,
-		"SELECT id, user_id, nickname, password, email, created_at, updated_at FROM users WHERE email = ?",
-		email,
-	).Scan(&user.Id, &user.UserId, &user.Nickname, &user.Password, &user.Email, &user.CreatedAt, &user.UpdatedAt)
+	err := q.Select(ctx, &user, query, arg)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
+			return nil, notFoundErr
 		}
 		return nil, err
 	}
+
 	return &user, nil
 }

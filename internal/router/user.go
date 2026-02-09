@@ -1,22 +1,36 @@
 package router
 
+import (
+	"github.com/sllt/kite-layout/internal/handler"
+	"github.com/sllt/kite-layout/pkg/errcode"
+	"github.com/sllt/kite/pkg/kite"
+)
+
+func requireAuthMiddleware() kite.KiteMiddleware {
+	return func(next kite.Handler) kite.Handler {
+		return func(ctx *kite.Context) (any, error) {
+			if handler.GetUserIdFromCtx(ctx) == "" {
+				return nil, errcode.ErrUnauthorized
+			}
+			return next(ctx)
+		}
+	}
+}
+
 // InitUserRouter registers user routes on the Kite app.
-// Since Kite doesn't support route-level middleware groups, authentication
-// is handled globally via NoStrictAuth middleware (which sets claims when
-// a token is present but doesn't reject requests without one).
-// Routes requiring strict authentication check for claims in the handler.
+// Token parsing is handled globally via NoStrictAuth middleware (which sets claims
+// when a token is present but doesn't reject requests without one).
+// Protected routes use a group-scoped Kite middleware for strict auth.
 func InitUserRouter(deps RouterDeps) {
-	app := deps.App
+	apiV1 := deps.App.Group("/api/v1")
 
 	// No authentication required
-	app.POST("/api/v1/register", deps.UserHandler.Register)
-	app.POST("/api/v1/login", deps.UserHandler.Login)
+	apiV1.POST("/register", deps.UserHandler.Register)
+	apiV1.POST("/login", deps.UserHandler.Login)
 
-	// Token optional - NoStrictAuth middleware runs globally and sets claims if present.
-	// Handler checks for claims and returns ErrUnauthorized if missing.
-	app.GET("/api/v1/user", deps.UserHandler.GetProfile)
-
-	// Token required - NoStrictAuth middleware runs globally and sets claims if present.
-	// Handler checks for claims and returns ErrUnauthorized if missing.
-	app.PUT("/api/v1/user", deps.UserHandler.UpdateProfile)
+	// Token required
+	userGroup := apiV1.Group("/user")
+	userGroup.UseMiddleware(requireAuthMiddleware())
+	userGroup.GET("/", deps.UserHandler.GetProfile)
+	userGroup.PUT("/", deps.UserHandler.UpdateProfile)
 }

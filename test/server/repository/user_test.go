@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -27,7 +28,49 @@ func (t *testDB) Begin() (*kiteSQL.Tx, error) {
 	return nil, errors.New("not implemented in test")
 }
 
-func (t *testDB) Select(_ context.Context, _ any, _ string, _ ...any) {}
+func (t *testDB) Select(ctx context.Context, data any, query string, args ...any) error {
+	rows, err := t.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	rv := reflect.ValueOf(data)
+	if rv.Kind() != reflect.Ptr || rv.IsNil() {
+		return errors.New("data must be a non-nil pointer")
+	}
+
+	elem := rv.Elem()
+	if elem.Kind() != reflect.Struct {
+		return nil
+	}
+
+	if !rows.Next() {
+		return sql.ErrNoRows
+	}
+
+	cols, _ := rows.Columns()
+	fields := make([]any, len(cols))
+	fieldMap := make(map[string]int)
+
+	for i := 0; i < elem.Type().NumField(); i++ {
+		tag := elem.Type().Field(i).Tag.Get("db")
+		if tag != "" {
+			fieldMap[tag] = i
+		}
+	}
+
+	for i, col := range cols {
+		if idx, ok := fieldMap[col]; ok {
+			fields[i] = elem.Field(idx).Addr().Interface()
+		} else {
+			var dummy any
+			fields[i] = &dummy
+		}
+	}
+
+	return rows.Scan(fields...)
+}
 
 func (t *testDB) HealthCheck() *datasource.Health { return nil }
 
@@ -99,7 +142,7 @@ func TestUserRepository_GetById(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{"id", "user_id", "nickname", "password", "email", "created_at", "updated_at"}).
 		AddRow(1, "123", "Test", "password", "test@example.com", now, now)
-	mock.ExpectQuery("SELECT id, user_id, nickname, password, email, created_at, updated_at FROM users WHERE user_id").
+	mock.ExpectQuery("SELECT \\* FROM users WHERE user_id").
 		WithArgs(userId).
 		WillReturnRows(rows)
 
@@ -121,7 +164,7 @@ func TestUserRepository_GetByEmail(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{"id", "user_id", "nickname", "password", "email", "created_at", "updated_at"}).
 		AddRow(1, "123", "Test", "password", "test@example.com", now, now)
-	mock.ExpectQuery("SELECT id, user_id, nickname, password, email, created_at, updated_at FROM users WHERE email").
+	mock.ExpectQuery("SELECT \\* FROM users WHERE email").
 		WithArgs(email).
 		WillReturnRows(rows)
 

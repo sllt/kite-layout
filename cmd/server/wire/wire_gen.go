@@ -7,6 +7,7 @@
 package wire
 
 import (
+	"github.com/google/wire"
 	"github.com/sllt/kite-layout/internal/handler"
 	"github.com/sllt/kite-layout/internal/repository"
 	"github.com/sllt/kite-layout/internal/router"
@@ -15,19 +16,18 @@ import (
 	"github.com/sllt/kite-layout/pkg/jwt"
 	"github.com/sllt/kite-layout/pkg/log"
 	"github.com/sllt/kite-layout/pkg/sid"
-	"github.com/google/wire"
 	"github.com/sllt/kite/pkg/kite"
 	"github.com/sllt/kite/pkg/kite/infra"
 )
 
 // Injectors from wire.go:
 
-func NewWire() (*kite.App, func(), error) {
-	kiteApp := NewKiteApp()
-	jwtJWT := jwt.NewJwt(kiteApp)
-	logger := NewLogger(kiteApp)
+func NewWire() (*App, func(), error) {
+	app := NewKiteApp()
+	logger := NewLogger(app)
+	jwtJWT := jwt.NewJwt(app)
 	handlerHandler := handler.NewHandler(logger)
-	db := NewDB(kiteApp)
+	db := NewDB(app)
 	repositoryRepository := repository.NewRepository(logger, db)
 	transaction := repository.NewTransaction(repositoryRepository)
 	sidSid := sid.NewSid()
@@ -36,14 +36,14 @@ func NewWire() (*kite.App, func(), error) {
 	userService := service.NewUserService(serviceService, userRepository)
 	userHandler := handler.NewUserHandler(handlerHandler, userService)
 	routerDeps := router.RouterDeps{
-		App:         kiteApp,
+		App:         app,
 		Logger:      logger,
 		JWT:         jwtJWT,
 		UserHandler: userHandler,
 	}
-	httpServerReady := server.NewHTTPServer(routerDeps)
-	app := newApp(kiteApp, httpServerReady)
-	return app, func() {
+	httpServerReady := server.NewHTTPServer(routerDeps, userService)
+	wireApp := newApp(app, httpServerReady)
+	return wireApp, func() {
 	}, nil
 }
 
@@ -72,11 +72,12 @@ func NewDB(app *kite.App) infra.DB {
 	return app.Container().SQL
 }
 
-// newApp ensures routes are registered (via HTTPServerReady dependency)
-// then returns the kite app for lifecycle management.
-func newApp(
-	app *kite.App,
-	_ *server.HTTPServerReady,
-) *kite.App {
-	return app
+// App wraps kite.App, embedding it so callers can use it transparently.
+// This wrapper exists because wire requires distinct types for providers.
+type App struct {
+	*kite.App
+}
+
+func newApp(app *kite.App, _ *server.HTTPServerReady) *App {
+	return &App{App: app}
 }

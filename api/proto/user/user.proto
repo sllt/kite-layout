@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "github.com/sllt/kite-layout/internal/grpc/user";
+
+service UserService {
+  rpc Register (RegisterRequest) returns (RegisterResponse) {}
+  rpc Login (LoginRequest) returns (LoginResponse) {}
+  rpc GetProfile (GetProfileRequest) returns (GetProfileResponse) {}
+  rpc UpdateProfile (UpdateProfileRequest) returns (UpdateProfileResponse) {}
+}
+
+message RegisterRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message RegisterResponse {}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  string access_token = 1;
+}
+
+message GetProfileRequest {
+  string user_id = 1;
+}
+
+message GetProfileResponse {
+  string user_id = 1;
+  string nickname = 2;
+}
+
+message UpdateProfileRequest {
+  string user_id = 1;
+  string nickname = 2;
+  string email = 3;
+}
+
+message UpdateProfileResponse {}
