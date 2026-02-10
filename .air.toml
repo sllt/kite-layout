@@ -1,0 +1,50 @@
+# Kite Layout - Air Configuration
+# Install: go install github.com/air-verse/air@latest
+# Usage:   air
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # Build command
+  cmd = "go build -o ./tmp/server ./cmd/server"
+  # Binary file
+  bin = "./tmp/server"
+  # Extra arguments passed to the binary
+  args_bin = ["-c", "configs"]
+  # Watch these file extensions
+  include_ext = ["go", "yaml", "yml"]
+  # Watch these additional directories
+  include_dir = ["cmd", "internal", "pkg", "configs"]
+  # Exclude directories
+  exclude_dir = ["tmp", "vendor", "node_modules", "test", "deploy", "docs", "scripts", "storage", "web", "migrations"]
+  # Exclude files
+  exclude_file = []
+  # Exclude regex
+  exclude_regex = ["_test\\.go$"]
+  # Exclude unchanged files
+  exclude_unchanged = false
+  # Delay after file change (ms)
+  delay = 500
+  # Stop old binary when build error occurs
+  stop_on_error = true
+  # Send interrupt signal before killing
+  send_interrupt = true
+  # Kill delay after interrupt (ms)
+  kill_delay = 500
+
+[log]
+  # Show log time
+  time = false
+  # Only show main log
+  main_only = false
+
+[color]
+  main = "magenta"
+  watcher = "cyan"
+  build = "yellow"
+  runner = "green"
+
+[misc]
+  # Delete tmp directory on exit
+  clean_on_exit = true
