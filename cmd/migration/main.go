@@ -4,13 +4,9 @@ import (
 	"context"
 
 	"github.com/sllt/kite-layout/cmd/migration/wire"
-	"github.com/sllt/kite-layout/pkg/config"
 )
 
 func main() {
-	// Ensure Kite can find the .env config file
-	config.SetupKiteEnv()
-
 	app, cleanup, err := wire.NewWire()
 	defer cleanup()
 	if err != nil {

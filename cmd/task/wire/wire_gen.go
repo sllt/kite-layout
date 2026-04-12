@@ -7,23 +7,21 @@
 package wire
 
 import (
+	"github.com/sllt/kite-layout/internal/bootstrap"
 	"github.com/sllt/kite-layout/internal/repository"
 	"github.com/sllt/kite-layout/internal/server"
 	"github.com/sllt/kite-layout/internal/task"
 	"github.com/sllt/kite-layout/pkg/app"
-	"github.com/sllt/kite-layout/pkg/log"
 	"github.com/sllt/kite-layout/pkg/sid"
 	"github.com/google/wire"
-	"github.com/sllt/kite/pkg/kite"
-	"github.com/sllt/kite/pkg/kite/infra"
 )
 
 // Injectors from wire.go:
 
 func NewWire() (*app.App, func(), error) {
-	kiteApp := NewKiteApp()
-	logger := NewLogger(kiteApp)
-	db := NewDB(kiteApp)
+	kiteApp := bootstrap.NewKiteApp()
+	logger := bootstrap.NewLogger(kiteApp)
+	db := bootstrap.NewDB(kiteApp)
 	repositoryRepository := repository.NewRepository(logger, db)
 	transaction := repository.NewTransaction(repositoryRepository)
 	sidSid := sid.NewSid()
@@ -43,21 +41,6 @@ var repositorySet = wire.NewSet(repository.NewRepository, repository.NewTransact
 var taskSet = wire.NewSet(task.NewTask, task.NewUserTask)
 
 var serverSet = wire.NewSet(server.NewTaskServer)
-
-// NewKiteApp creates a kite.App.
-func NewKiteApp() *kite.App {
-	return kite.New()
-}
-
-// NewLogger extracts kite's logger from the container and wraps it.
-func NewLogger(app2 *kite.App) *log.Logger {
-	return log.NewLogger(app2.Container().Logger)
-}
-
-// NewDB extracts infra.DB from the kite app's container
-func NewDB(app2 *kite.App) infra.DB {
-	return app2.Container().SQL
-}
 
 // build App
 func newApp(task2 *server.TaskServer,

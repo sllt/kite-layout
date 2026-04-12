@@ -3,12 +3,13 @@ init:
 	go install github.com/google/wire/cmd/wire@latest
 	go install github.com/golang/mock/mockgen@latest
 	go install github.com/swaggo/swag/cmd/swag@latest
+	go install github.com/air-verse/air@latest
 
 .PHONY: bootstrap
 bootstrap:
 	cd ./deploy/docker-compose && docker compose up -d && cd ../../
 	go run ./cmd/migration
-	nunu run ./cmd/server
+	air
 
 .PHONY: mock
 mock:

@@ -2,12 +2,11 @@ package main
 
 import (
 	"github.com/sllt/kite-layout/cmd/server/wire"
-	"github.com/sllt/kite-layout/pkg/config"
 )
 
-// @title           Nunu Example API
+// @title           Kite Example API
 // @version         1.0.0
-// @description     This is a sample server celler server.
+// @description     Example API server built with Kite framework.
 // @termsOfService  http://swagger.io/terms/
 // @contact.name   API Support
 // @contact.url    http://www.swagger.io/support
@@ -21,9 +20,6 @@ import (
 // @externalDocs.description  OpenAPI
 // @externalDocs.url          https://swagger.io/resources/open-api/
 func main() {
-	// Ensure Kite can find the .env config file
-	config.SetupKiteEnv()
-
 	app, cleanup, err := wire.NewWire()
 	defer cleanup()
 	if err != nil {

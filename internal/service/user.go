@@ -33,12 +33,12 @@ type userService struct {
 }
 
 func (s *userService) Register(ctx context.Context, input *types.RegisterInput) error {
-	// check username
+	// check if email already exists
 	user, err := s.userRepo.GetByEmail(ctx, input.Email)
 	if err != nil {
 		return errcode.ErrInternalServerError
 	}
-	if err == nil && user != nil {
+	if user != nil {
 		return errcode.ErrEmailAlreadyUse
 	}
 
