@@ -1,13 +1,14 @@
 package middleware
 
 import (
-	"encoding/json"
-	"github.com/duke-git/lancet/v2/cryptor"
-	"github.com/sllt/kite-layout/pkg/log"
 	"net/http"
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/duke-git/lancet/v2/cryptor"
+	"github.com/sllt/kite-layout/pkg/errcode"
+	"github.com/sllt/kite-layout/pkg/log"
 )
 
 func SignMiddleware(logger *log.Logger) func(http.Handler) http.Handler {
@@ -21,13 +22,10 @@ func SignMiddleware(logger *log.Logger) func(http.Handler) http.Handler {
 			for _, header := range requiredHeaders {
 				value := r.Header.Get(header)
 				if value == "" {
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusBadRequest)
-					json.NewEncoder(w).Encode(map[string]any{
-						"code":    http.StatusBadRequest,
-						"data":    nil,
-						"message": "Bad Request",
-					})
+					if logger != nil {
+						logger.Warnf("missing signature header=%s url=%s", header, r.URL)
+					}
+					errcode.WriteHTTPError(w, r, errcode.ErrBadRequest)
 					return
 				}
 			}
@@ -52,13 +50,10 @@ func SignMiddleware(logger *log.Logger) func(http.Handler) http.Handler {
 			str += appSecret
 
 			if r.Header.Get("Sign") != strings.ToUpper(cryptor.Md5String(str)) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]any{
-					"code":    http.StatusBadRequest,
-					"data":    nil,
-					"message": "Bad Request",
-				})
+				if logger != nil {
+					logger.Warnf("invalid signature url=%s", r.URL)
+				}
+				errcode.WriteHTTPError(w, r, errcode.ErrInvalidSignature)
 				return
 			}
 			next.ServeHTTP(w, r)

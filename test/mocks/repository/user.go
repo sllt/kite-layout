@@ -8,8 +8,8 @@ import (
 	context "context"
 	reflect "reflect"
 
-	model "github.com/sllt/kite-layout/internal/model"
 	gomock "github.com/golang/mock/gomock"
+	model "github.com/sllt/kite-layout/internal/model"
 )
 
 // MockUserRepository is a mock of UserRepository interface.
@@ -91,4 +91,70 @@ func (m *MockUserRepository) Update(ctx context.Context, user *model.User) error
 func (mr *MockUserRepositoryMockRecorder) Update(ctx, user interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockUserRepository)(nil).Update), ctx, user)
+}
+
+// MockUserProfileRepository is a mock of UserProfileRepository interface.
+type MockUserProfileRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockUserProfileRepositoryMockRecorder
+}
+
+// MockUserProfileRepositoryMockRecorder is the mock recorder for MockUserProfileRepository.
+type MockUserProfileRepositoryMockRecorder struct {
+	mock *MockUserProfileRepository
+}
+
+// NewMockUserProfileRepository creates a new mock instance.
+func NewMockUserProfileRepository(ctrl *gomock.Controller) *MockUserProfileRepository {
+	mock := &MockUserProfileRepository{ctrl: ctrl}
+	mock.recorder = &MockUserProfileRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockUserProfileRepository) EXPECT() *MockUserProfileRepositoryMockRecorder {
+	return m.recorder
+}
+
+// Create mocks base method.
+func (m *MockUserProfileRepository) Create(ctx context.Context, profile *model.UserProfile) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Create", ctx, profile)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Create indicates an expected call of Create.
+func (mr *MockUserProfileRepositoryMockRecorder) Create(ctx, profile interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockUserProfileRepository)(nil).Create), ctx, profile)
+}
+
+// GetByUserID mocks base method.
+func (m *MockUserProfileRepository) GetByUserID(ctx context.Context, userId string) (*model.UserProfile, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByUserID", ctx, userId)
+	ret0, _ := ret[0].(*model.UserProfile)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByUserID indicates an expected call of GetByUserID.
+func (mr *MockUserProfileRepositoryMockRecorder) GetByUserID(ctx, userId interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByUserID", reflect.TypeOf((*MockUserProfileRepository)(nil).GetByUserID), ctx, userId)
+}
+
+// Update mocks base method.
+func (m *MockUserProfileRepository) Update(ctx context.Context, profile *model.UserProfile) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Update", ctx, profile)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Update indicates an expected call of Update.
+func (mr *MockUserProfileRepositoryMockRecorder) Update(ctx, profile interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockUserProfileRepository)(nil).Update), ctx, profile)
 }

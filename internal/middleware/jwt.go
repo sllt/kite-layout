@@ -2,10 +2,11 @@ package middleware
 
 import (
 	"context"
-	"encoding/json"
+	"net/http"
+
+	"github.com/sllt/kite-layout/pkg/errcode"
 	"github.com/sllt/kite-layout/pkg/jwt"
 	"github.com/sllt/kite-layout/pkg/log"
-	"net/http"
 )
 
 type contextKey string
@@ -18,26 +19,14 @@ func StrictAuth(j *jwt.JWT, logger *log.Logger) func(http.Handler) http.Handler 
 			tokenString := r.Header.Get("Authorization")
 			if tokenString == "" {
 				logger.Warnf("No token url=%s", r.URL)
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(map[string]any{
-					"code":    http.StatusUnauthorized,
-					"data":    nil,
-					"message": "Unauthorized",
-				})
+				errcode.WriteHTTPError(w, r, errcode.ErrUnauthorized)
 				return
 			}
 
 			claims, err := j.ParseToken(tokenString)
 			if err != nil {
 				logger.Errorf("token error url=%s err=%v", r.URL, err)
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(map[string]any{
-					"code":    http.StatusUnauthorized,
-					"data":    nil,
-					"message": "Unauthorized",
-				})
+				errcode.WriteHTTPError(w, r, errcode.ErrUnauthorized)
 				return
 			}
 

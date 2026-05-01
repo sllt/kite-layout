@@ -2,53 +2,51 @@ package server
 
 import (
 	"context"
+	"time"
+
 	"github.com/go-co-op/gocron"
 	"github.com/sllt/kite-layout/internal/task"
 	"github.com/sllt/kite-layout/pkg/log"
-	"time"
+	"go.uber.org/fx"
 )
 
-type TaskServer struct {
-	log       *log.Logger
-	scheduler *gocron.Scheduler
-	userTask  task.UserTask
-}
+func RegisterTaskServer(lc fx.Lifecycle, log *log.Logger, userTask task.UserTask) {
+	var (
+		scheduler *gocron.Scheduler
+		runCtx    context.Context
+		cancel    context.CancelFunc
+	)
 
-func NewTaskServer(
-	log *log.Logger,
-	userTask task.UserTask,
-) *TaskServer {
-	return &TaskServer{
-		log:      log,
-		userTask: userTask,
-	}
-}
-func (t *TaskServer) Start(ctx context.Context) error {
-	gocron.SetPanicHandler(func(jobName string, recoverData interface{}) {
-		t.log.Errorf("TaskServer Panic job=%s recover=%v", jobName, recoverData)
+	lc.Append(fx.Hook{
+		OnStart: func(context.Context) error {
+			gocron.SetPanicHandler(func(jobName string, recoverData interface{}) {
+				log.Errorf("TaskServer Panic job=%s recover=%v", jobName, recoverData)
+			})
+
+			runCtx, cancel = context.WithCancel(context.Background())
+			scheduler = gocron.NewScheduler(time.UTC)
+
+			_, err := scheduler.CronWithSeconds("0/3 * * * * *").Do(func() {
+				if err := userTask.CheckUser(runCtx); err != nil {
+					log.Errorf("CheckUser error: %v", err)
+				}
+			})
+			if err != nil {
+				return err
+			}
+
+			scheduler.StartAsync()
+			return nil
+		},
+		OnStop: func(context.Context) error {
+			if cancel != nil {
+				cancel()
+			}
+			if scheduler != nil {
+				scheduler.Stop()
+			}
+			log.Info("TaskServer stop...")
+			return nil
+		},
 	})
-
-	// eg: crontab task
-	t.scheduler = gocron.NewScheduler(time.UTC)
-	// if you are in China, you will need to change the time zone as follows
-	// t.scheduler = gocron.NewScheduler(time.FixedZone("PRC", 8*60*60))
-
-	//_, err := t.scheduler.Every("3s").Do(func()
-	_, err := t.scheduler.CronWithSeconds("0/3 * * * * *").Do(func() {
-		err := t.userTask.CheckUser(ctx)
-		if err != nil {
-			t.log.Errorf("CheckUser error: %v", err)
-		}
-	})
-	if err != nil {
-		t.log.Errorf("CheckUser error: %v", err)
-	}
-
-	t.scheduler.StartBlocking()
-	return nil
-}
-func (t *TaskServer) Stop(ctx context.Context) error {
-	t.scheduler.Stop()
-	t.log.Info("TaskServer stop...")
-	return nil
 }

@@ -76,7 +76,7 @@ func (t *testDB) HealthCheck() *datasource.Health { return nil }
 
 func (t *testDB) Dialect() string { return "mysql" }
 
-func setupRepository(t *testing.T) (repository.UserRepository, sqlmock.Sqlmock) {
+func setupRepository(t *testing.T) (*repository.Repository, sqlmock.Sqlmock) {
 	mockDB, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("failed to create sqlmock: %v", err)
@@ -84,24 +84,32 @@ func setupRepository(t *testing.T) (repository.UserRepository, sqlmock.Sqlmock) 
 
 	db := &testDB{DB: mockDB}
 	repo := repository.NewRepository(logger, db)
-	userRepo := repository.NewUserRepository(repo)
 
-	return userRepo, mock
+	return repo, mock
+}
+
+func setupUserRepository(t *testing.T) (repository.UserRepository, sqlmock.Sqlmock) {
+	repo, mock := setupRepository(t)
+	return repository.NewUserRepository(repo), mock
+}
+
+func setupUserProfileRepository(t *testing.T) (repository.UserProfileRepository, sqlmock.Sqlmock) {
+	repo, mock := setupRepository(t)
+	return repository.NewUserProfileRepository(repo), mock
 }
 
 func TestUserRepository_Create(t *testing.T) {
-	userRepo, mock := setupRepository(t)
+	userRepo, mock := setupUserRepository(t)
 
 	ctx := context.Background()
 	user := &model.User{
 		UserId:   "123",
-		Nickname: "Test",
 		Password: "password",
 		Email:    "test@example.com",
 	}
 
 	mock.ExpectExec("INSERT INTO users").
-		WithArgs(user.UserId, user.Nickname, user.Password, user.Email, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs(user.UserId, user.Password, user.Email, sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	err := userRepo.Create(ctx, user)
@@ -112,19 +120,18 @@ func TestUserRepository_Create(t *testing.T) {
 }
 
 func TestUserRepository_Update(t *testing.T) {
-	userRepo, mock := setupRepository(t)
+	userRepo, mock := setupUserRepository(t)
 
 	ctx := context.Background()
 	user := &model.User{
 		Id:       1,
 		UserId:   "123",
-		Nickname: "Test",
 		Password: "password",
 		Email:    "test@example.com",
 	}
 
 	mock.ExpectExec("UPDATE users SET").
-		WithArgs(user.Nickname, user.Password, user.Email, sqlmock.AnyArg(), user.Id).
+		WithArgs(user.Password, user.Email, sqlmock.AnyArg(), user.Id).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	err := userRepo.Update(ctx, user)
@@ -134,15 +141,15 @@ func TestUserRepository_Update(t *testing.T) {
 }
 
 func TestUserRepository_GetById(t *testing.T) {
-	userRepo, mock := setupRepository(t)
+	userRepo, mock := setupUserRepository(t)
 
 	ctx := context.Background()
 	userId := "123"
 	now := time.Now()
 
-	rows := sqlmock.NewRows([]string{"id", "user_id", "nickname", "password", "email", "created_at", "updated_at"}).
-		AddRow(1, "123", "Test", "password", "test@example.com", now, now)
-	mock.ExpectQuery("SELECT \\* FROM users WHERE user_id").
+	rows := sqlmock.NewRows([]string{"id", "user_id", "password", "email", "created_at", "updated_at"}).
+		AddRow(1, "123", "password", "test@example.com", now, now)
+	mock.ExpectQuery("SELECT id, user_id, password, email, created_at, updated_at FROM users WHERE user_id").
 		WithArgs(userId).
 		WillReturnRows(rows)
 
@@ -150,21 +157,20 @@ func TestUserRepository_GetById(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
 	assert.Equal(t, "123", user.UserId)
-	assert.Equal(t, "Test", user.Nickname)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestUserRepository_GetByEmail(t *testing.T) {
-	userRepo, mock := setupRepository(t)
+	userRepo, mock := setupUserRepository(t)
 
 	ctx := context.Background()
 	email := "test@example.com"
 	now := time.Now()
 
-	rows := sqlmock.NewRows([]string{"id", "user_id", "nickname", "password", "email", "created_at", "updated_at"}).
-		AddRow(1, "123", "Test", "password", "test@example.com", now, now)
-	mock.ExpectQuery("SELECT \\* FROM users WHERE email").
+	rows := sqlmock.NewRows([]string{"id", "user_id", "password", "email", "created_at", "updated_at"}).
+		AddRow(1, "123", "password", "test@example.com", now, now)
+	mock.ExpectQuery("SELECT id, user_id, password, email, created_at, updated_at FROM users WHERE email").
 		WithArgs(email).
 		WillReturnRows(rows)
 
@@ -172,6 +178,68 @@ func TestUserRepository_GetByEmail(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
 	assert.Equal(t, "test@example.com", user.Email)
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUserProfileRepository_Create(t *testing.T) {
+	profileRepo, mock := setupUserProfileRepository(t)
+
+	ctx := context.Background()
+	profile := &model.UserProfile{
+		UserId:   "123",
+		Nickname: "Test",
+	}
+
+	mock.ExpectExec("INSERT INTO user_profiles").
+		WithArgs(profile.UserId, profile.Nickname, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	err := profileRepo.Create(ctx, profile)
+	assert.NoError(t, err)
+	assert.Equal(t, uint(1), profile.Id)
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUserProfileRepository_Update(t *testing.T) {
+	profileRepo, mock := setupUserProfileRepository(t)
+
+	ctx := context.Background()
+	profile := &model.UserProfile{
+		Id:       1,
+		UserId:   "123",
+		Nickname: "Test",
+	}
+
+	mock.ExpectExec("UPDATE user_profiles SET").
+		WithArgs(profile.Nickname, sqlmock.AnyArg(), profile.Id).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	err := profileRepo.Update(ctx, profile)
+	assert.NoError(t, err)
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUserProfileRepository_GetByUserID(t *testing.T) {
+	profileRepo, mock := setupUserProfileRepository(t)
+
+	ctx := context.Background()
+	userId := "123"
+	now := time.Now()
+
+	rows := sqlmock.NewRows([]string{"id", "user_id", "nickname", "created_at", "updated_at"}).
+		AddRow(1, "123", "Test", now, now)
+	mock.ExpectQuery("SELECT id, user_id, nickname, created_at, updated_at FROM user_profiles WHERE user_id").
+		WithArgs(userId).
+		WillReturnRows(rows)
+
+	profile, err := profileRepo.GetByUserID(ctx, userId)
+	assert.NoError(t, err)
+	assert.NotNil(t, profile)
+	assert.Equal(t, "123", profile.UserId)
+	assert.Equal(t, "Test", profile.Nickname)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 }

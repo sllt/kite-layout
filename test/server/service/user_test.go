@@ -4,17 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/sllt/kite-layout/pkg/jwt"
-	"github.com/sllt/kite-layout/test/mocks/repository"
 	"os"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/sllt/kite-layout/internal/model"
 	"github.com/sllt/kite-layout/internal/service"
 	"github.com/sllt/kite-layout/internal/types"
+	"github.com/sllt/kite-layout/pkg/jwt"
 	"github.com/sllt/kite-layout/pkg/log"
 	"github.com/sllt/kite-layout/pkg/sid"
-	"github.com/golang/mock/gomock"
+	"github.com/sllt/kite-layout/test/mocks/repository"
 	"github.com/sllt/kite/pkg/kite/logging"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/bcrypt"
@@ -42,15 +42,25 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+func newUserServiceForTest(ctrl *gomock.Controller) (
+	*mock_repository.MockUserRepository,
+	*mock_repository.MockUserProfileRepository,
+	*mock_repository.MockTransaction,
+	service.UserService,
+) {
+	mockUserRepo := mock_repository.NewMockUserRepository(ctrl)
+	mockProfileRepo := mock_repository.NewMockUserProfileRepository(ctrl)
+	mockTm := mock_repository.NewMockTransaction(ctrl)
+	srv := service.NewService(mockTm, logger, sf, j)
+
+	return mockUserRepo, mockProfileRepo, mockTm, service.NewUserService(srv, mockUserRepo, mockProfileRepo)
+}
+
 func TestUserService_Register(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := mock_repository.NewMockUserRepository(ctrl)
-	mockTm := mock_repository.NewMockTransaction(ctrl)
-	srv := service.NewService(mockTm, logger, sf, j)
-
-	userService := service.NewUserService(srv, mockUserRepo)
+	mockUserRepo, mockProfileRepo, mockTm, userService := newUserServiceForTest(ctrl)
 
 	ctx := context.Background()
 	req := &types.RegisterInput{
@@ -59,7 +69,26 @@ func TestUserService_Register(t *testing.T) {
 	}
 
 	mockUserRepo.EXPECT().GetByEmail(ctx, req.Email).Return(nil, nil)
-	mockTm.EXPECT().Transaction(ctx, gomock.Any()).Return(nil)
+	mockTm.EXPECT().
+		Transaction(ctx, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, fn func(context.Context) error) error {
+			return fn(ctx)
+		})
+	mockUserRepo.EXPECT().
+		Create(ctx, gomock.AssignableToTypeOf(&model.User{})).
+		DoAndReturn(func(_ context.Context, user *model.User) error {
+			assert.Equal(t, req.Email, user.Email)
+			assert.NotEmpty(t, user.UserId)
+			assert.NotEqual(t, req.Password, user.Password)
+			return nil
+		})
+	mockProfileRepo.EXPECT().
+		Create(ctx, gomock.AssignableToTypeOf(&model.UserProfile{})).
+		DoAndReturn(func(_ context.Context, profile *model.UserProfile) error {
+			assert.NotEmpty(t, profile.UserId)
+			assert.Equal(t, "test", profile.Nickname)
+			return nil
+		})
 
 	err := userService.Register(ctx, req)
 
@@ -70,10 +99,7 @@ func TestUserService_Register_UsernameExists(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := mock_repository.NewMockUserRepository(ctrl)
-	mockTm := mock_repository.NewMockTransaction(ctrl)
-	srv := service.NewService(mockTm, logger, sf, j)
-	userService := service.NewUserService(srv, mockUserRepo)
+	mockUserRepo, _, _, userService := newUserServiceForTest(ctrl)
 
 	ctx := context.Background()
 	req := &types.RegisterInput{
@@ -92,10 +118,7 @@ func TestUserService_Login(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := mock_repository.NewMockUserRepository(ctrl)
-	mockTm := mock_repository.NewMockTransaction(ctrl)
-	srv := service.NewService(mockTm, logger, sf, j)
-	userService := service.NewUserService(srv, mockUserRepo)
+	mockUserRepo, _, _, userService := newUserServiceForTest(ctrl)
 
 	ctx := context.Background()
 	req := &types.LoginInput{
@@ -121,10 +144,7 @@ func TestUserService_Login_UserNotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := mock_repository.NewMockUserRepository(ctrl)
-	mockTm := mock_repository.NewMockTransaction(ctrl)
-	srv := service.NewService(mockTm, logger, sf, j)
-	userService := service.NewUserService(srv, mockUserRepo)
+	mockUserRepo, _, _, userService := newUserServiceForTest(ctrl)
 
 	ctx := context.Background()
 	req := &types.LoginInput{
@@ -143,33 +163,28 @@ func TestUserService_GetProfile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := mock_repository.NewMockUserRepository(ctrl)
-	mockTm := mock_repository.NewMockTransaction(ctrl)
-	srv := service.NewService(mockTm, logger, sf, j)
-	userService := service.NewUserService(srv, mockUserRepo)
+	_, mockProfileRepo, _, userService := newUserServiceForTest(ctrl)
 
 	ctx := context.Background()
 	userId := "123"
 
-	mockUserRepo.EXPECT().GetByID(ctx, userId).Return(&model.User{
-		UserId: userId,
-		Email:  "test@example.com",
+	mockProfileRepo.EXPECT().GetByUserID(ctx, userId).Return(&model.UserProfile{
+		UserId:   userId,
+		Nickname: "testuser",
 	}, nil)
 
 	user, err := userService.GetProfile(ctx, userId)
 
 	assert.NoError(t, err)
 	assert.Equal(t, userId, user.UserId)
+	assert.Equal(t, "testuser", user.Nickname)
 }
 
 func TestUserService_UpdateProfile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := mock_repository.NewMockUserRepository(ctrl)
-	mockTm := mock_repository.NewMockTransaction(ctrl)
-	srv := service.NewService(mockTm, logger, sf, j)
-	userService := service.NewUserService(srv, mockUserRepo)
+	mockUserRepo, mockProfileRepo, mockTm, userService := newUserServiceForTest(ctrl)
 
 	ctx := context.Background()
 	userId := "123"
@@ -182,7 +197,24 @@ func TestUserService_UpdateProfile(t *testing.T) {
 		UserId: userId,
 		Email:  "old@example.com",
 	}, nil)
+	mockProfileRepo.EXPECT().GetByUserID(ctx, userId).Return(&model.UserProfile{
+		Id:       1,
+		UserId:   userId,
+		Nickname: "old",
+	}, nil)
+	mockUserRepo.EXPECT().GetByEmail(ctx, req.Email).Return(nil, nil)
+	mockTm.EXPECT().
+		Transaction(ctx, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, fn func(context.Context) error) error {
+			return fn(ctx)
+		})
 	mockUserRepo.EXPECT().Update(ctx, gomock.Any()).Return(nil)
+	mockProfileRepo.EXPECT().
+		Update(ctx, gomock.AssignableToTypeOf(&model.UserProfile{})).
+		DoAndReturn(func(_ context.Context, profile *model.UserProfile) error {
+			assert.Equal(t, req.Nickname, profile.Nickname)
+			return nil
+		})
 
 	err := userService.UpdateProfile(ctx, userId, req)
 
@@ -193,10 +225,7 @@ func TestUserService_UpdateProfile_UserNotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := mock_repository.NewMockUserRepository(ctrl)
-	mockTm := mock_repository.NewMockTransaction(ctrl)
-	srv := service.NewService(mockTm, logger, sf, j)
-	userService := service.NewUserService(srv, mockUserRepo)
+	mockUserRepo, _, _, userService := newUserServiceForTest(ctrl)
 
 	ctx := context.Background()
 	userId := "123"

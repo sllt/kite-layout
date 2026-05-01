@@ -1,18 +1,17 @@
 package main
 
 import (
-	"context"
-
-	"github.com/sllt/kite-layout/cmd/task/wire"
+	"github.com/sllt/kite-layout/internal/bootstrap"
+	"github.com/sllt/kite-layout/internal/server"
+	"go.uber.org/fx"
 )
 
 func main() {
-	app, cleanup, err := wire.NewWire()
-	defer cleanup()
-	if err != nil {
-		panic(err)
-	}
-	if err = app.Run(context.Background()); err != nil {
-		panic(err)
-	}
+	fx.New(
+		bootstrap.CoreModule,
+		bootstrap.InfraModule,
+		bootstrap.RepositoryModule,
+		bootstrap.TaskModule,
+		fx.Invoke(server.RegisterTaskServer),
+	).Run()
 }

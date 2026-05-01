@@ -9,5 +9,6 @@ var (
 	ErrInternalServerError = New(500, "Internal Server Error")
 
 	// biz errors
-	ErrEmailAlreadyUse = New(1001, "The email is already in use.")
+	ErrEmailAlreadyUse  = New(1001, "The email is already in use.")
+	ErrInvalidSignature = New(1002, "Invalid signature")
 )

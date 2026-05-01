@@ -8,15 +8,10 @@ import (
 	"github.com/sllt/kite/pkg/kite"
 )
 
-// HTTPServerReady is a marker type indicating the HTTP server has been configured.
-// It is used in the Wire DI graph to ensure route and middleware registration
-// happens before the application starts.
-type HTTPServerReady struct{}
-
 func NewHTTPServer(
 	deps router.RouterDeps,
 	userService service.UserService,
-) *HTTPServerReady {
+) {
 	app := deps.App
 
 	// Register global middleware
@@ -30,7 +25,7 @@ func NewHTTPServer(
 
 	// Root route
 	app.GET("/", func(ctx *kite.Context) (any, error) {
-		return map[string]interface{}{
+		return map[string]any{
 			":)": "Thank you for using kite!",
 		}, nil
 	})
@@ -41,6 +36,4 @@ func NewHTTPServer(
 	// Register gRPC services
 	userKiteServer := user.NewUserServiceKiteServerWithService(userService)
 	user.RegisterUserServiceServerWithKite(app, userKiteServer)
-
-	return &HTTPServerReady{}
 }

@@ -5,7 +5,7 @@
 ## 特性
 
 - **分层架构** - Handler → Service → Repository → Model
-- **依赖注入** - 使用 [Wire](https://github.com/google/wire) 管理依赖
+- **依赖注入** - 使用 [Fx](https://github.com/uber-go/fx) 管理依赖图与入口装配
 - **数据库支持** - 基于 Kite 的 SQL 抽象，支持事务
 - **JWT 认证** - 全局解析令牌 + 受保护路由强制鉴权
 - **定时任务** - 集成 gocron 调度
@@ -21,8 +21,9 @@
 - `internal/service`：业务逻辑层
 - `internal/repository`：数据访问层
 - `internal/router`：路由与鉴权包装
-- `internal/server`：各类 server 实现
-- `pkg/app`：通用应用生命周期管理
+- `internal/server`：HTTP / migration / task 的运行时注册
+- `internal/bootstrap`：Fx modules 与基础构造函数
+- `docs/architecture`：架构与业务模块开发约定
 - `pkg/config`：环境配置约定
 
 ## 快速开始
@@ -82,17 +83,35 @@ make bootstrap
 
 ## 配置约定
 
-- 运行时通过 `pkg/config.SetupKiteEnv` 设置 `CONFIGS_DIR=./configs`
-- Kite 从 `./configs/.env` 读取配置
+- Kite 默认从项目根目录下的 `./configs/.env` 读取配置
+- 本地开发先复制 `configs/.env.example` 到 `configs/.env`
 - **密钥管理建议**：
   - 本地开发：放 `configs/.env`（不提交）
   - CI/CD：放平台 Secret
   - 生产环境：使用环境变量或密钥管理系统注入
 
+## 生命周期约定
+
+- `cmd/server` 使用 Fx 负责依赖装配，启动后通过 `kiteApp.RunContext(ctx)` 交给 Kite 管理 HTTP/gRPC/metrics 生命周期。
+- `cmd/server` 自己创建 signal context，避免 Fx `Run()` 和 Kite `Run()` 双重接管 OS signal。
+- Fx 只调用 `Start` / `Stop`，Kite app 由 `RunContext` 在同一个 context 下启动、阻塞和优雅停机。
+- `cmd/migration` 是一次性入口，仍通过 Fx `OnStart` 执行迁移并主动 shutdown。
+- `cmd/task` 由 Fx 托管 gocron scheduler 生命周期。
+
 ## 鉴权策略
 
 - 全局中间件使用 `NoStrictAuth`：有 token 就解析 claims，无 token 不拦截。
 - 需要登录的路由在 `internal/router` 使用 `RouteGroup.UseMiddleware(...)` 做分组强制鉴权。
+
+## 业务模块开发
+
+新增业务模块建议参考 `docs/architecture/module.md`。当前 `user` 模块已经演示：
+
+- API DTO、domain types、model、repository、service、handler、router 的分层边界；
+- 注册用户时在一个事务内同时创建账号记录和用户资料记录；
+- 更新资料时在一个事务内同时更新账号邮箱和资料昵称。
+
+错误码与响应 envelope 约定参考 `docs/architecture/error.md`。Handler / Service 直接返回 `pkg/errcode`，`net/http` middleware 使用 `errcode.WriteHTTPError`，避免重复手写 JSON 响应。
 
 ## 测试
 

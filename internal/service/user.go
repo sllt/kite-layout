@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"strings"
+	"time"
+
 	"github.com/sllt/kite-layout/internal/model"
 	"github.com/sllt/kite-layout/internal/repository"
 	"github.com/sllt/kite-layout/internal/types"
 	"github.com/sllt/kite-layout/pkg/errcode"
 	"golang.org/x/crypto/bcrypt"
-	"time"
 )
 
 type UserService interface {
@@ -20,15 +22,18 @@ type UserService interface {
 func NewUserService(
 	service *Service,
 	userRepo repository.UserRepository,
+	profileRepo repository.UserProfileRepository,
 ) UserService {
 	return &userService{
-		userRepo: userRepo,
-		Service:  service,
+		userRepo:    userRepo,
+		profileRepo: profileRepo,
+		Service:     service,
 	}
 }
 
 type userService struct {
-	userRepo repository.UserRepository
+	userRepo    repository.UserRepository
+	profileRepo repository.UserProfileRepository
 	*Service
 }
 
@@ -56,14 +61,17 @@ func (s *userService) Register(ctx context.Context, input *types.RegisterInput) 
 		Email:    input.Email,
 		Password: string(hashedPassword),
 	}
-	// Transaction demo
+	profile := &model.UserProfile{
+		UserId:   userId,
+		Nickname: defaultNickname(input.Email),
+	}
+
+	// Transaction demo: keep account and profile creation atomic.
 	err = s.tm.Transaction(ctx, func(ctx context.Context) error {
-		// Create a user
 		if err = s.userRepo.Create(ctx, user); err != nil {
 			return err
 		}
-		// TODO: other repo
-		return nil
+		return s.profileRepo.Create(ctx, profile)
 	})
 	return err
 }
@@ -87,14 +95,14 @@ func (s *userService) Login(ctx context.Context, input *types.LoginInput) (*type
 }
 
 func (s *userService) GetProfile(ctx context.Context, userId string) (*types.UserOutput, error) {
-	user, err := s.userRepo.GetByID(ctx, userId)
+	profile, err := s.profileRepo.GetByUserID(ctx, userId)
 	if err != nil {
 		return nil, err
 	}
 
 	return &types.UserOutput{
-		UserId:   user.UserId,
-		Nickname: user.Nickname,
+		UserId:   profile.UserId,
+		Nickname: profile.Nickname,
 	}, nil
 }
 
@@ -103,13 +111,36 @@ func (s *userService) UpdateProfile(ctx context.Context, userId string, input *t
 	if err != nil {
 		return err
 	}
-
-	user.Email = input.Email
-	user.Nickname = input.Nickname
-
-	if err = s.userRepo.Update(ctx, user); err != nil {
+	profile, err := s.profileRepo.GetByUserID(ctx, userId)
+	if err != nil {
 		return err
 	}
 
-	return nil
+	if input.Email != user.Email {
+		existing, err := s.userRepo.GetByEmail(ctx, input.Email)
+		if err != nil {
+			return errcode.ErrInternalServerError
+		}
+		if existing != nil && existing.UserId != userId {
+			return errcode.ErrEmailAlreadyUse
+		}
+	}
+
+	user.Email = input.Email
+	profile.Nickname = input.Nickname
+
+	return s.tm.Transaction(ctx, func(ctx context.Context) error {
+		if err := s.userRepo.Update(ctx, user); err != nil {
+			return err
+		}
+		return s.profileRepo.Update(ctx, profile)
+	})
+}
+
+func defaultNickname(email string) string {
+	local, _, ok := strings.Cut(email, "@")
+	if !ok || local == "" {
+		return "New User"
+	}
+	return local
 }

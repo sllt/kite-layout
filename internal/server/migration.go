@@ -6,26 +6,26 @@ import (
 	"github.com/sllt/kite-layout/migrations"
 	"github.com/sllt/kite-layout/pkg/log"
 	"github.com/sllt/kite/pkg/kite"
+	"go.uber.org/fx"
 )
 
-type MigrateServer struct {
-	app *kite.App
-	log *log.Logger
-}
+func RegisterMigrateServer(lc fx.Lifecycle, shutdowner fx.Shutdowner, app *kite.App, log *log.Logger) {
+	lc.Append(fx.Hook{
+		OnStart: func(context.Context) error {
+			app.Migrate(migrations.All())
+			log.Info("Migration success")
 
-func NewMigrateServer(app *kite.App, log *log.Logger) *MigrateServer {
-	return &MigrateServer{
-		app: app,
-		log: log,
-	}
-}
-func (m *MigrateServer) Start(ctx context.Context) error {
-	_ = ctx
-	m.app.Migrate(migrations.All())
-	m.log.Info("Migration success")
-	return nil
-}
-func (m *MigrateServer) Stop(ctx context.Context) error {
-	m.log.Info("Migration stop")
-	return nil
+			go func() {
+				if err := shutdowner.Shutdown(); err != nil {
+					log.Errorf("Migration shutdown error: %v", err)
+				}
+			}()
+
+			return nil
+		},
+		OnStop: func(context.Context) error {
+			log.Info("Migration stop")
+			return nil
+		},
+	})
 }

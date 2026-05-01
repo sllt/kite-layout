@@ -1,8 +1,32 @@
 package main
 
 import (
-	"github.com/sllt/kite-layout/cmd/server/wire"
+	"context"
+	"errors"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/sllt/kite-layout/internal/bootstrap"
+	"github.com/sllt/kite-layout/internal/server"
+	"github.com/sllt/kite/pkg/kite"
+	"go.uber.org/fx"
 )
+
+const fxLifecycleTimeout = 15 * time.Second
+
+type fxStopper interface {
+	Stop(context.Context) error
+}
+
+func stopFXApp(app fxStopper, timeout time.Duration) error {
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), timeout)
+	defer stopCancel()
+
+	return app.Stop(stopCtx)
+}
 
 // @title           Kite Example API
 // @version         1.0.0
@@ -20,12 +44,46 @@ import (
 // @externalDocs.description  OpenAPI
 // @externalDocs.url          https://swagger.io/resources/open-api/
 func main() {
-	app, cleanup, err := wire.NewWire()
-	defer cleanup()
-	if err != nil {
-		panic(err)
+	if err := run(); err != nil {
+		log.Fatalf("server error: %v", err)
+	}
+}
+
+func run() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	return runWithContext(ctx)
+}
+
+func runWithContext(ctx context.Context) (err error) {
+	var kiteApp *kite.App
+
+	fxApp := fx.New(
+		bootstrap.CoreModule,
+		bootstrap.InfraModule,
+		bootstrap.RepositoryModule,
+		bootstrap.ServiceModule,
+		bootstrap.HandlerModule,
+		fx.Invoke(server.NewHTTPServer),
+		fx.Populate(&kiteApp),
+	)
+
+	startCtx, cancel := context.WithTimeout(context.Background(), fxLifecycleTimeout)
+	defer cancel()
+
+	if err := fxApp.Start(startCtx); err != nil {
+		return err
+	}
+	defer func() {
+		if stopErr := stopFXApp(fxApp, fxLifecycleTimeout); stopErr != nil {
+			err = errors.Join(err, stopErr)
+		}
+	}()
+
+	if kiteApp == nil {
+		return errors.New("kite app was not populated")
 	}
 
-	// Kite's Run() manages the HTTP server lifecycle including graceful shutdown
-	app.Run()
+	return kiteApp.RunContext(ctx)
 }
